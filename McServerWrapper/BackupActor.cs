@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Akka.Actor;
 using Akka.Event;
+using Akka.Util.Internal;
 
 namespace McServerWrapper
 {
@@ -26,7 +27,7 @@ namespace McServerWrapper
 
         private void Ready()
         {
-            Receive<string>(s =>
+            Receive<DoBackup>(s =>
             {
                 _log.Info($"Received '{s}'");
                 var backupFilename = $"{DateTime.Now:yyyy-MM-ddTHH-mm-ss}.tar";
@@ -36,9 +37,11 @@ namespace McServerWrapper
                     FileName = "tar",
                     ArgumentList = {"cvf", backupFullFilename, _serverDirectory},
                     RedirectStandardError = true,
+                    RedirectStandardOutput = true
                 };
-                _log.Info($"executing {processStartupInfo.FileName} with arguments {processStartupInfo.Arguments}");
+                _log.Info($"executing {processStartupInfo.FileName} with arguments {processStartupInfo.ArgumentList}");
                 _process = Process.Start(processStartupInfo) ?? throw new Exception("Could not start tar utility");
+                _process.StandardOutput.ReadLineAsync().PipeTo(Self);
                 _process.WaitForExitAsync().ContinueWith(task => new Finished(_process.ExitCode, backupFullFilename))
                     .PipeTo(Self);
                 Become(Working);
@@ -47,8 +50,18 @@ namespace McServerWrapper
 
         private record Finished(int ProcessExitCode, string BackupFullFilename);
 
+        public record DoBackup;
+
         private void Working()
         {
+            Receive<string>(s =>
+            {
+                if(s!=null)
+                {
+                    _log.Info($"[TAR] {s}");
+                    _process.StandardOutput.ReadLineAsync().PipeTo(Self);
+                }
+            });
             Receive<Finished>(done =>
             {
                 _log.Info($"Backup process has finished");

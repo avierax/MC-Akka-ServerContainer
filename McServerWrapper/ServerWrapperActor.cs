@@ -5,7 +5,7 @@ using Akka.Event;
 
 namespace McServerWrapper
 {
-    class ServerWrapperActor : ReceiveActor
+    class ServerWrapperActor : ReceiveActor, IWithTimers
     {
         private readonly ILoggingAdapter _log = Context.GetLogger();
 
@@ -29,6 +29,7 @@ namespace McServerWrapper
 
         public record MineCraftStartInfo(string Jar, string ServerDir);
 
+
         public ServerWrapperActor(MineCraftStartInfo mineCraftStartInfo, string backupDir)
         {
             _mineCraftStartInfo = mineCraftStartInfo;
@@ -38,14 +39,15 @@ namespace McServerWrapper
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = "java",
-                    ArgumentList = { "-Xmx5g", "-jar", "server.jar", "--nogui"},
+                    ArgumentList = {"-Xmx5g", "-jar", "server.jar", "--nogui"},
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     RedirectStandardInput = true,
                     WorkingDirectory = mineCraftStartInfo.ServerDir
                 };
                 _process = Process.Start(startInfo) ?? throw new Exception("Error while starting process");
-                _backupActor = Context.ActorOf(BackupActor.Props(backupDir, mineCraftStartInfo.ServerDir));
+                _backupActor = Context.ActorOf(BackupActor.Props(backupDir, mineCraftStartInfo.ServerDir),
+                    "backupWorker");
                 Become(Started);
             });
         }
@@ -76,8 +78,17 @@ namespace McServerWrapper
                     _log.Info($"[Output] {line}");
                     if (line.Contains("[Server thread/INFO]") && line.Contains("Saved the game"))
                     {
-                        _backupActor.Tell(_mineCraftStartInfo);
+                        _backupActor.Tell(new BackupActor.DoBackup());
                         _log.Info("Starting backup");
+                    }
+
+                    if (line.Contains("[Server thread/INFO]: Done"))
+                    {
+                        _log.Info("Server has started");
+                        _log.Info("Disabling auto save");
+                        Self.Tell(new McCommand("/save-off"));
+                        Timers.StartPeriodicTimer("save-all", new McCommand("/save-all"), TimeSpan.FromMinutes(5),
+                            TimeSpan.FromMinutes(5));
                     }
                     StdOutReadLineAsync();
                 }
@@ -91,11 +102,9 @@ namespace McServerWrapper
                 _log.Info("Backup done");
                 _process.StandardInput.WriteLine($"/say backup was done {done.Filename}");
             });
+            Receive<BackupFailed>(failed => { _log.Info($"Backup failed {failed}"); });
             Receive<Stop>(stop => { _process.StandardInput.Close(); });
-            Receive<McCommand>(command =>
-            {
-                _process.StandardInput.WriteLine(command.Command);
-            });
+            Receive<McCommand>(command => { _process.StandardInput.WriteLine(command.Command); });
         }
 
         private void StdErrReadLineAsync()
@@ -114,5 +123,7 @@ namespace McServerWrapper
 
         public static Props Props(MineCraftStartInfo mineCraftStartInfo, string backupDir) =>
             Akka.Actor.Props.Create(() => new ServerWrapperActor(mineCraftStartInfo, backupDir));
+
+        public ITimerScheduler Timers { get; set; } = null!;
     }
 }
