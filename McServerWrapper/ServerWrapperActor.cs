@@ -19,6 +19,8 @@ namespace McServerWrapper
 
         public record BackupFailed(int ExitCode, string? ErrorMsg);
 
+        public record McCommand(string Command);
+
         #endregion
 
         private readonly MineCraftStartInfo _mineCraftStartInfo;
@@ -90,6 +92,10 @@ namespace McServerWrapper
                 _process.StandardInput.WriteLine($"/say backup was done {done.Filename}");
             });
             Receive<Stop>(stop => { _process.StandardInput.Close(); });
+            Receive<McCommand>(command =>
+            {
+                _process.StandardInput.WriteLine(command.Command);
+            });
         }
 
         private void StdErrReadLineAsync()
