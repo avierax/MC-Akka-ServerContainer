@@ -19,8 +19,8 @@ namespace McServerWrapper
             var serverJar = Environment.GetEnvironmentVariable(ServerJar) ?? throw new Exception("Server jar must be specified");
             var backupDir = Environment.GetEnvironmentVariable(BackupDir) ??
                             throw new Exception("BackupDir must be specified");
-            var wrapperRef = actorSystem.ActorOf(ServerWrapperActor.Props(new ServerWrapperActor.MineCraftStartInfo(serverJar, serverDir), backupDir));
-            var consoleActor = actorSystem.ActorOf(ConsoleActor.Props(wrapperRef));
+            var wrapperRef = actorSystem.ActorOf(ServerWrapperActor.Props(new ServerWrapperActor.MineCraftStartInfo(serverJar, serverDir), backupDir), "wrapper");
+            var consoleActor = actorSystem.ActorOf(ConsoleActor.Props(wrapperRef), "consoleReader");
             consoleActor.Tell("start");
             wrapperRef.Tell(new ServerWrapperActor.Start());
             actorSystem.WhenTerminated.Wait();
