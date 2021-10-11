@@ -12,6 +12,11 @@
             // If you have changed target frameworks, make sure to update the program path.
             "program": "${workspaceFolder}/McServerWrapper/bin/Debug/net5.0/McServerWrapper.dll",
             "args": [],
+            "env": {
+                    "SERVERDIR":"/mnt/c/Minecraft/servers/17-biomemeltpot/server",
+                    "SERVERJAR":"/mnt/c/Minecraft/servers/17-biomemeltpot/server/server.jar",
+                    "BACKUPDIR":"/mnt/c/Minecraft/servers/17-biomemeltpot/namedbackups"
+                },
             "cwd": "${workspaceFolder}/McServerWrapper",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",
