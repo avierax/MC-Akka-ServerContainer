@@ -36,7 +36,7 @@ namespace McServerWrapper
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = "java",
-                    ArgumentList = { "-jar", "server.jar", "--nogui"},
+                    ArgumentList = { "-Xmx5g", "-jar", "server.jar", "--nogui"},
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     RedirectStandardInput = true,
