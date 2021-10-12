@@ -10,15 +10,18 @@ namespace McServerWrapper
     class BackupActor : ReceiveActor
     {
         private readonly ILoggingAdapter _log = Context.GetLogger();
+        private readonly string _namedBackupDir;
         private readonly string _backupDirectory;
         private readonly string _serverDirectory;
         private Process _process = null!;
+        private string? _alias;
 
-        public static Props Props(string backupDirectory, string serverDirectory) =>
-            Akka.Actor.Props.Create(() => new BackupActor(backupDirectory, serverDirectory));
+        public static Props Props(string namedBackupDir, string backupDirectory, string serverDirectory) =>
+            Akka.Actor.Props.Create(() => new BackupActor(namedBackupDir, backupDirectory, serverDirectory));
 
-        public BackupActor(string backupDirectory, string serverDirectory)
+        public BackupActor(string namedBackupDir, string backupDirectory, string serverDirectory)
         {
+            _namedBackupDir = namedBackupDir;
             _backupDirectory = backupDirectory;
             _serverDirectory = serverDirectory;
             Become(Ready);
@@ -29,13 +32,14 @@ namespace McServerWrapper
         {
             Receive<DoBackup>(s =>
             {
+                _alias = s.BackupAlias;
                 _log.Info($"Received '{s}'");
                 var backupFilename = $"{DateTime.Now:yyyy-MM-ddTHH-mm-ss}.tar";
                 var backupFullFilename = $"{_backupDirectory}/{backupFilename}";
                 var processStartupInfo = new ProcessStartInfo
                 {
                     FileName = "tar",
-                    ArgumentList = {"cvf", backupFullFilename, _serverDirectory},
+                    ArgumentList = {"cvf", backupFullFilename, "-C", $"{_serverDirectory}/..", "server"},
                     RedirectStandardError = true,
                     RedirectStandardOutput = true
                 };
@@ -50,7 +54,7 @@ namespace McServerWrapper
 
         private record Finished(int ProcessExitCode, string BackupFullFilename);
 
-        public record DoBackup;
+        public record DoBackup(string? BackupAlias);
 
         private void Working()
         {
@@ -70,6 +74,8 @@ namespace McServerWrapper
                 {
                     _log.Info("Success: tar process exit code was zero.");
                     Context.Parent.Tell(new ServerWrapperActor.BackupDone(filename));
+                    if(_alias!=null)
+                        Process.Start("ln", new[] {"-s", "-T", filename, $"{_namedBackupDir}/{_alias}"});
                 }
                 else
                 {
